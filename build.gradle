@@ -1,0 +1,151 @@
+description = 'Poptalk analytics'
+
+
+buildscript {
+    repositories {
+        maven { url 'http://repo.spring.io/plugins-release' }
+    }
+    dependencies {
+        classpath 'org.springframework.build.gradle:propdeps-plugin:0.0.6'
+        classpath 'org.springframework.build.gradle:docbook-reference-plugin:0.2.4'
+        classpath 'me.champeau.gradle:gradle-javadoc-hotfix-plugin:0.1'
+    }
+}
+
+group = 'com.infinityquick.poptalk'
+
+ext {
+    moduleType = 'sink'
+    moduleName = 'elasticsearch'
+}
+
+repositories {
+    maven { url "http://repo.spring.io/plugins-release" }
+    mavenCentral()
+}
+
+apply plugin: "java"
+apply plugin: 'eclipse'
+apply plugin: 'idea'
+apply plugin: 'javadocHotfix'
+apply plugin: 'propdeps'
+apply plugin: 'propdeps-idea'
+apply plugin: 'propdeps-eclipse'
+
+[compileJava, compileTestJava]*.options*.compilerArgs = ["-Xlint:-serial"]
+[compileJava, compileTestJava]*.options*.compilerArgs = ["-Xlint:-serial", "-Xlint:deprecation"]
+
+// Common dependencies
+dependencies {
+    // Provided dependencies (for testing and IDE support)
+    provided "org.springframework:spring-core:$springVersion"
+    provided "org.springframework:spring-messaging:$springVersion"
+    provided "org.springframework.xd:spring-xd-module-spi:$springXDVersion"
+    provided "org.springframework.xd:spring-xd-tuple:$springXDVersion"
+    provided "org.hibernate:hibernate-validator:$hibernateValidatorVersion"
+
+    // Compile
+    compile ("org.springframework.integration:spring-integration-http:$springIntegrationVersion") {
+        transitive = false
+    }
+
+    // Testing
+    testCompile "junit:junit:$junitVersion"
+    testCompile "org.springframework:spring-test:$springVersion"
+    testCompile "org.mockito:mockito-core:$mockitoVersion"
+    testCompile "org.hamcrest:hamcrest-library:$hamcrestVersion"
+
+}
+
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+javadoc {
+    ext.srcDir = file("${projectDir}/docs/src/api")
+    destinationDir = file("${buildDir}/api")
+    ext.tmpDir = file("${buildDir}/api-work")
+
+    configure(options) {
+        stylesheetFile = file("${srcDir}/spring-javadoc.css")
+        overview = "${srcDir}/overview.html"
+        docFilesSubDirs = true
+        outputLevel = org.gradle.external.javadoc.JavadocOutputLevel.QUIET
+        breakIterator = true
+        showFromProtected()
+        links = [
+                "http://static.springframework.org/spring/docs/3.1.x/javadoc-api",
+                "http://download.oracle.com/javase/6/docs/api",
+        ]
+
+        exclude "org/springframework/data/redis/config/**"
+    }
+
+    title = "${rootProject.description} ${version} API"
+}
+
+task sourcesJar(type: Jar, dependsOn:classes) {
+    classifier = 'sources'
+    from sourceSets.main.allJava
+}
+
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+}
+
+
+task xdModule(type: Copy, dependsOn: build) {
+
+    def moduleDir = project.file("${buildDir}/modules/${moduleType}/${moduleName}")
+    inputs.property('deps', configurations.default)
+    outputs.dir "${moduleDir}/lib"
+
+    into moduleDir
+
+    from(configurations.default) {
+        into "lib"
+        exclude "jackson*.jar", "jcl*.jar", "joda*.jar", "slf4j*.jar", "spring-jdbc*.jar", "spring-web*.jar"
+
+    }
+    from(jar) {
+        into "lib"
+    }
+    from ("modules/${moduleType}/${moduleName}/config") {
+        into "config"
+    }
+}
+
+task xdModuleZip(type: Zip, dependsOn: xdModule) {
+    group = 'Distribution'
+    classifier = 'xdmodule'
+    description = "Builds -${classifier} archive, containing an XD module"
+
+    into("${moduleType}/${moduleName}") {
+        from(xdModule.destinationDir)
+    }
+
+}
+
+tasks.withType(Test) {
+    systemProperty 'runLongTests', System.getProperty('runLongTests')
+
+    testLogging {
+        exceptionFormat = 'full'
+    }
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+
+    archives xdModuleZip
+}
+
+task wrapper(type: Wrapper) {
+    description = 'Generates gradlew[.bat] scripts'
+    gradleVersion = '1.11'
+}
+
+assemble.dependsOn = ['jar', 'sourcesJar']
+defaultTasks 'build'
