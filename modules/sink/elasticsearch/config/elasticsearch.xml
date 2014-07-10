@@ -5,13 +5,6 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
                            http://www.springframework.org/schema/integration/http http://www.springframework.org/schema/integration/http/spring-integration-http.xsd">
 
-    <bean id="elasticSearchUrlGenerator" class="org.springframework.xd.modules.sink.elasticsearch.ElasticSearchUrlGenerator">
-       <property name="protocol" value="${protocol}"/>
-       <property name="hosts" value="${hosts}"/>
-       <property name="index" value="${index}"/>
-       <property name="type" value="${type}"/>
-    </bean>
-
     <http:outbound-channel-adapter
             id="input"
             auto-startup="false"
@@ -19,4 +12,13 @@
             extract-payload="true"
             http-method="POST">
     </http:outbound-channel-adapter>
+
+    <bean id="elasticSearchUrlGenerator" class="org.springframework.xd.modules.sink.elasticsearch.ElasticSearchUrlGenerator">
+        <property name="protocol" value="${protocol}"/>
+        <property name="hosts" value="${hosts}"/>
+        <property name="index" value="${index}"/>
+        <property name="type" value="${type}"/>
+    </bean>
+
+
 </beans>

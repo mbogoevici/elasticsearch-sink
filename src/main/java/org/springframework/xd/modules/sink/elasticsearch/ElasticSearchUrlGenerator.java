@@ -26,7 +26,11 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * A simple URL generator for posting data to ElasticSearch
+ * A simple generator of URLs for posting data to ElasticSearch, in the form:
+ *
+ * {@code http://host:port/index/collection}
+ *
+ * The main role of the class is to support
  *
  * @author: Marius Bogoevici
  */
@@ -40,6 +44,8 @@ public class ElasticSearchUrlGenerator implements InitializingBean {
 
     private volatile List<String> hosts;
 
+    private volatile int hostsSize;
+
     private volatile String index;
 
     private volatile String type;
@@ -50,9 +56,9 @@ public class ElasticSearchUrlGenerator implements InitializingBean {
 
     public void setHosts(String hostList) {
         Assert.notNull(hostList, "The list of hostList cannot be null");
-        String[] hostsAsSplitArray = hostList.split(",");
+        String[] parsedHostList = hostList.split(",");
         ArrayList<String> configuredHosts = new ArrayList<String>();
-        for (String hostName : hostsAsSplitArray) {
+        for (String hostName : parsedHostList) {
             if (hostName.contains(":")) {
                 // The host name contains port information
                 configuredHosts.add(hostName);
@@ -62,6 +68,7 @@ public class ElasticSearchUrlGenerator implements InitializingBean {
             }
         }
         this.hosts = Collections.unmodifiableList(configuredHosts);
+        this.hostsSize = this.hosts.size();
     }
 
     public void setIndex(String index) {
@@ -95,8 +102,9 @@ public class ElasticSearchUrlGenerator implements InitializingBean {
 
 
     private String getNextHost() {
-        // we can safely assume a
-        if (hosts.size() == 1) {
+        // by this point, we can safely assume that there's at least one host definition,
+        // or else the bean definition would fail
+        if (hostsSize == 1) {
             return hosts.get(0);
         } else {
             int nextCounter = counter.incrementAndGet() % hosts.size();
