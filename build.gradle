@@ -4,6 +4,7 @@ description = 'Poptalk analytics'
 buildscript {
     repositories {
         maven { url 'http://repo.spring.io/plugins-release' }
+        maven { url "http://repo.spring.io/libs-snapshot" }
     }
     dependencies {
         classpath 'org.springframework.build.gradle:propdeps-plugin:0.0.6'
@@ -28,26 +29,39 @@ apply plugin: "java"
 apply plugin: 'eclipse'
 apply plugin: 'idea'
 apply plugin: 'javadocHotfix'
-apply plugin: 'propdeps'
-apply plugin: 'propdeps-idea'
-apply plugin: 'propdeps-eclipse'
 
 [compileJava, compileTestJava]*.options*.compilerArgs = ["-Xlint:-serial"]
 [compileJava, compileTestJava]*.options*.compilerArgs = ["-Xlint:-serial", "-Xlint:deprecation"]
 
+configurations {
+    // for handling Spring XD dependencies
+    dirt {}
+
+    // for handling ElasticSearch dependencies
+    // Note: due to a classloader issue in ElasticSearch, the library (and therefore clients) cannot be
+    // loaded in the module classloader and must be loaded in the parent (see the deployElasticSearch task
+    // below)
+    elasticsearch {}
+}
+
 // Common dependencies
 dependencies {
     // Provided dependencies (for testing and IDE support)
-    provided "org.springframework:spring-core:$springVersion"
-    provided "org.springframework:spring-messaging:$springVersion"
-    provided "org.springframework.xd:spring-xd-module-spi:$springXDVersion"
-    provided "org.springframework.xd:spring-xd-tuple:$springXDVersion"
-    provided "org.hibernate:hibernate-validator:$hibernateValidatorVersion"
+    compile "org.springframework:spring-core:$springVersion"
+    compile "org.springframework:spring-messaging:$springVersion"
+    compile "org.springframework.xd:spring-xd-module-spi:$springXDVersion"
+    compile "org.springframework.xd:spring-xd-tuple:$springXDVersion"
+    compile "org.hibernate:hibernate-validator:$hibernateValidatorVersion"
+    compile "org.codehaus.groovy:groovy-all:$groovyVersion"
+    compile "com.jayway.jsonpath:json-path:$jsonPathVersion"
+    compile ("org.springframework.integration:spring-integration-http:$springIntegrationVersion")
+    compile ("org.springframework.data:spring-data-elasticsearch:$springDataElasticSearchVersion")
+    compile ("org.elasticsearch:elasticsearch:$elasticSearchVersion")
 
-    // Compile
-    compile ("org.springframework.integration:spring-integration-http:$springIntegrationVersion") {
-        transitive = false
-    }
+    dirt "org.springframework.xd:spring-xd-dirt:$springXDVersion"
+
+    // informative - for deploying elasticsearch into Spring XD and excluding references
+    elasticsearch "org.elasticsearch:elasticsearch:$elasticSearchVersion"
 
     // Testing
     testCompile "junit:junit:$junitVersion"
@@ -58,8 +72,17 @@ dependencies {
 }
 
 
-sourceCompatibility = 1.7
-targetCompatibility = 1.7
+sourceCompatibility = 1.6
+targetCompatibility = 1.6
+
+sourceSets {
+    test {
+        resources {
+            srcDir "modules/${moduleType}/${moduleName}"
+            srcDir 'src/main/resources'
+        }
+    }
+}
 
 javadoc {
     ext.srcDir = file("${projectDir}/docs/src/api")
@@ -94,16 +117,15 @@ task javadocJar(type: Jar) {
     from javadoc
 }
 
-
 task xdModule(type: Copy, dependsOn: build) {
-
+    def moduleRuntime = configurations.runtime.minus(configurations.dirt).minus(configurations.elasticsearch)
     def moduleDir = project.file("${buildDir}/modules/${moduleType}/${moduleName}")
-    inputs.property('deps', configurations.default)
+    inputs.property('deps', moduleRuntime)
     outputs.dir "${moduleDir}/lib"
 
     into moduleDir
 
-    from(configurations.default) {
+    from(moduleRuntime) {
         into "lib"
         exclude "jackson*.jar", "jcl*.jar", "joda*.jar", "slf4j*.jar", "spring-jdbc*.jar", "spring-web*.jar"
 
@@ -127,6 +149,21 @@ task xdModuleZip(type: Zip, dependsOn: xdModule) {
 
 }
 
+task elasticSearchDeploy(type: Copy) {
+
+}
+
+task xdModuleUndeploy(type:Delete) {
+
+}
+
+task xdModuleDeploy(type:Copy, dependsOn:xdModuleUndeploy) {
+
+}
+
+xdModuleDeploy.dependsOn xdModuleUndeploy
+xdModuleDeploy.dependsOn xdModule
+
 tasks.withType(Test) {
     systemProperty 'runLongTests', System.getProperty('runLongTests')
 
@@ -147,5 +184,25 @@ task wrapper(type: Wrapper) {
     gradleVersion = '1.11'
 }
 
+gradle.taskGraph.whenReady {
+    // since we check for a Spring XD location only when deploying and undeploying, we will wait until
+    // the task graph is built and check whether any of those tasks are actually executing
+    if (gradle.taskGraph.hasTask(':elasticSearchDeploy') ||
+            gradle.taskGraph.hasTask(':xdModuleDeploy') ||
+            gradle.taskGraph.hasTask(':xdModuleUndeploy')) {
+        def xdHome = project.hasProperty('xdHome') ? project.xdHome : System.env.XD_HOME;
+        if (xdHome == null) {
+            throw new GradleScriptException("A Spring XD home directory must be specified, either as the environment " +
+                    "variable XD_HOME, or through a project setting -PxdHome=<some-directory>", null)
+        }
+        elasticSearchDeploy.from(configurations.elasticsearch)
+        elasticSearchDeploy.into(xdHome + "/lib")
+        xdModuleUndeploy.delete("$xdHome/modules/$moduleType/$moduleName")
+        xdModuleDeploy.from(project.file("${buildDir}/modules/${moduleType}/${moduleName}"))
+        xdModuleDeploy.into("$xdHome/modules/$moduleType/${moduleName}")
+    }
+}
+
 assemble.dependsOn = ['jar', 'sourcesJar']
 defaultTasks 'build'
+

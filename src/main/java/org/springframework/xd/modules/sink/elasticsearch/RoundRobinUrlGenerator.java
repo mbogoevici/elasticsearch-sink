@@ -16,25 +16,26 @@
 
 package org.springframework.xd.modules.sink.elasticsearch;
 
-import org.springframework.beans.factory.BeanCreationException;
-import org.springframework.beans.factory.InitializingBean;
-import org.springframework.util.Assert;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.integration.json.JsonPathUtils;
+import org.springframework.util.Assert;
+
 /**
  * A simple generator of URLs for posting data to ElasticSearch, in the form:
- *
- * {@code http://host:port/index/collection}
- *
- * The main role of the class is to support
+ * <p/>
+ * {@code http://host:port/index/type}
+ * <p/>
+ * The main role of this class is to support the round-robin load-balancing multiple ElasticSearch nodes in a cluster.
  *
  * @author: Marius Bogoevici
  */
-public class ElasticSearchUrlGenerator implements InitializingBean {
+public class RoundRobinUrlGenerator implements InitializingBean {
 
     private static final int DEFAULT_PORT = 9200;
 
@@ -50,12 +51,25 @@ public class ElasticSearchUrlGenerator implements InitializingBean {
 
     private volatile String type;
 
+    private volatile String idPath;
+
+
+    /**
+     * Sets the protoc
+     *
+     * @param protocol
+     */
     public void setProtocol(String protocol) {
         this.protocol = protocol;
     }
 
+    /**
+     * Sets the list of hosts that the HTTP client will try to connect to
+     *
+     * @param hostList
+     */
     public void setHosts(String hostList) {
-        Assert.notNull(hostList, "The list of hostList cannot be null");
+        Assert.notNull(hostList, "The list of hosts cannot be null");
         String[] parsedHostList = hostList.split(",");
         ArrayList<String> configuredHosts = new ArrayList<String>();
         for (String hostName : parsedHostList) {
@@ -71,12 +85,31 @@ public class ElasticSearchUrlGenerator implements InitializingBean {
         this.hostsSize = this.hosts.size();
     }
 
+    /**
+     * The ElasticSearch index where the data will be stored
+     *
+     * @param index - the name of the index, e.g. 'twitter'
+     */
     public void setIndex(String index) {
         this.index = index;
     }
 
+    /**
+     * The ElasticSearch type of the stored data
+     *
+     * @param type - the name of the type, e.g. 'tweet'
+     */
     public void setType(String type) {
         this.type = type;
+    }
+
+    /**
+     * The JSONPath expression that is used to infer the id of the inserted document
+     *
+     * @param idPath - JSONPath expression, e.g. '$.id'
+     */
+    public void setIdPath(String idPath) {
+        this.idPath = idPath;
     }
 
     @Override
@@ -96,8 +129,12 @@ public class ElasticSearchUrlGenerator implements InitializingBean {
         }
     }
 
-    public String getUrl() {
-        return protocol + "://" + getNextHost() + "/" + index + "/" + type;
+    public String getUrl(String payload) throws Exception {
+        if (idPath == null) {
+            return protocol + "://" + getNextHost() + "/" + index + "/" + type;
+        } else {
+            return protocol + "://" + getNextHost() + "/" + index + "/" + type + "/" + JsonPathUtils.evaluate(payload, idPath);
+        }
     }
 
 

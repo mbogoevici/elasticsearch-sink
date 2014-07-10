@@ -2,23 +2,65 @@
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xmlns:http="http://www.springframework.org/schema/integration/http"
+       xmlns:int="http://www.springframework.org/schema/integration"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
                            http://www.springframework.org/schema/integration/http http://www.springframework.org/schema/integration/http/spring-integration-http.xsd">
 
-    <http:outbound-channel-adapter
-            id="input"
-            auto-startup="false"
-            url-expression="@elasticSearchUrlGenerator.getUrl()"
-            extract-payload="true"
-            http-method="POST">
-    </http:outbound-channel-adapter>
+    <beans profile="http">
 
-    <bean id="elasticSearchUrlGenerator" class="org.springframework.xd.modules.sink.elasticsearch.ElasticSearchUrlGenerator">
-        <property name="protocol" value="${protocol}"/>
-        <property name="hosts" value="${hosts}"/>
-        <property name="index" value="${index}"/>
-        <property name="type" value="${type}"/>
-    </bean>
+        <http:outbound-channel-adapter
+                id="input"
+                url-expression="@elasticSearchUrlGenerator.getUrl(payload)"
+                extract-payload="true"
+                rest-template="restTemplate"
+                http-method="${httpMethod}">
+        </http:outbound-channel-adapter>
 
+        <bean id="restTemplate" class="org.springframework.web.client.RestTemplate"/>
 
+        <bean id="elasticSearchUrlGenerator" class="org.springframework.xd.modules.sink.elasticsearch.RoundRobinUrlGenerator">
+            <property name="protocol" value="${protocol}"/>
+            <property name="hosts" value="${hosts}"/>
+            <property name="index" value="${index}"/>
+            <property name="type" value="${type}"/>
+            <property name="idPath" value="${idPath:#{null}}"/>
+        </bean>
+    </beans>
+
+    <beans profile="transport">
+        <!-- we use a bean definition here rather than the namespace element, because of
+                    https://jira.spring.io/browse/DATAES-103 -->
+
+        <bean id="elasticSearchClient" class="org.springframework.data.elasticsearch.client.TransportClientFactoryBean">
+            <property name="clientIgnoreClusterName" value="false"/>
+            <property name="clientPingTimeout" value="5s"/>
+            <property name="clientNodesSamplerInterval" value="5s"/>
+            <property name="clientTransportSniff" value="true"/>
+            <property name="clusterName" value="${clusterName}"/>
+            <property name="clusterNodes" value="${hosts}"/>
+        </bean>
+    </beans>
+
+    <beans profile="node">
+        <!-- we use a bean definition here rather than the namespace element, because of
+            https://jira.spring.io/browse/DATAES-103 -->
+        <bean id="elasticSearchClient" class="org.springframework.data.elasticsearch.client.NodeClientFactoryBean">
+            <property name="clusterName" value="${clusterName}" />
+            <property name="enableHttp" value="false"/>
+            <property name="local" value="false"/>
+        </bean>
+    </beans>
+
+    <beans profile="transport,node">
+        <int:channel id="input"/>
+        <int:outbound-channel-adapter channel="input">
+            <bean class="org.springframework.xd.modules.sink.elasticsearch.ElasticSearchSinkMessageHandler">
+                <property name="index" value="${index}"/>
+                <property name="type" value="${type}"/>
+                <property name="client" ref="elasticSearchClient"/>
+                <property name="idPath" value="${idPath:#{null}}"/>
+            </bean>
+        </int:outbound-channel-adapter>
+    </beans>
 </beans>
