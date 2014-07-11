@@ -62,6 +62,8 @@ The following configuration parameters are specific to the `node` mode:
 Usage examples
 --------------
 
+NOTE: when using the examples, please make sure that one or more ElasticSearch nodes are running.
+
 Transport mode, id assigned from document
 
     stream create --name twittersearchWorldCup --definition "twittersearch --consumerKey=<consumerKey> --consumerSecret=<consumerSecret< --query='#WorldCup' | elasticsearch --mode=transport --idPath=$.id --hosts=localhost:9300,localhost:9301 --index=twitter --type=tweet --clusterName=elasticsearch" --deploy
