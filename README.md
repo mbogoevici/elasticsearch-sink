@@ -64,7 +64,7 @@ Usage examples
 
 Transport mode, id assigned from document
 
-    stream create --name twittersearchWorldCup --definition "twittersearch --consumerKey=<consumerKey> --consumerSecret=<consumerSecret< --query='#WorldCup' | elasticsearch --mode=transport --idPath=id --hosts=localhost:9300,localhost:9301 --index=twitter --type=tweet --clusterName=elasticsearch" --deploy
+    stream create --name twittersearchWorldCup --definition "twittersearch --consumerKey=<consumerKey> --consumerSecret=<consumerSecret< --query='#WorldCup' | elasticsearch --mode=transport --idPath=$.id --hosts=localhost:9300,localhost:9301 --index=twitter --type=tweet --clusterName=elasticsearch" --deploy
 
 HTTP mode, id automatic
 
