@@ -32,7 +32,7 @@ Note: if the environment variable XD_HOME is already defined, then the `-PxdHome
 
 Deploy the module
 
-    ./gradlew xdDeploy -PxdHome=<spring-xd-home>
+    ./gradlew xdModuleDeploy -PxdHome=<spring-xd-home>
     
 Note: as above, if the environment variable XD_HOME is already defined, then the `-PxdHome` parameter can be ommitted.
 
