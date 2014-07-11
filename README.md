@@ -28,6 +28,8 @@ Deploy ElasticSearch if using transport or node modes
 
     ./gradlew elasticSearchDeploy -PxdHome=<spring-xd-home>
 
+Restart the Spring XD server after doing so.
+
 Note: if the environment variable XD_HOME is already defined, then the `-PxdHome` parameter can be ommitted.
 
 Deploy the module
