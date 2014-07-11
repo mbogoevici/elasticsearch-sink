@@ -57,19 +57,19 @@ public class ElasticSearchSinkOptionMetadata implements ProfileNamesProvider,Val
 
     // Settings
 
-    private String protocol = "http";
+    private volatile String protocol = "http";
 
-    private String hosts = "localhost:9300";
+    private volatile String hosts = "localhost:9300";
 
-    private String index;
+    private volatile String index;
 
-    private String type;
+    private volatile String type;
 
-    private String idPath;
+    private volatile String idPath;
 
-    private String clusterName;
+    private volatile String clusterName;
 
-    private SinkMode mode = transport;
+    private volatile SinkMode mode = transport;
 
     @NotBlank(groups = HttpValidationGroup.class)
     public String getProtocol() {
